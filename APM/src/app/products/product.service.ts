@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
-import { catchError, Observable, tap, throwError, map, combineLatest } from 'rxjs';
+import { catchError, Observable, tap, throwError, map, combineLatest, BehaviorSubject, Subject, merge, scan } from 'rxjs';
 
 import { Product } from './product';
 import { ProductCategoryService } from '../product-categories/product-category.service';
@@ -15,13 +15,6 @@ export class ProductService {
 
   products$ = this.http.get<Product[]>(this.productsUrl)
     .pipe(
-      // map(products =>
-      //   products.map(product => ({
-      //     ...product,
-      //     price: product.price ? product.price * 1.5 : 0,
-      //     searchKey: [product.productName]
-      //   } as Product))
-      // ),
       tap(data => console.log('Products: ', JSON.stringify(data))),
       catchError(this.handleError)
     );
@@ -40,6 +33,37 @@ export class ProductService {
     )
   )
 
+  private productSelectedSubject = new BehaviorSubject<number>(0);
+  productSelectedAction$ = this.productSelectedSubject.asObservable();
+
+  selectedProduct$ = combineLatest([
+    this.productWithCategories$,
+    this.productSelectedAction$])
+    .pipe(
+      map(([products, selectedProductId]) =>
+        products.find(product => product.id === selectedProductId)
+      ),
+      tap(product => console.log('SelectedProduct', product))
+    );
+
+
+
+  private productInsertedSubject = new Subject<Product>();
+  productInsertedAction$ = this.productInsertedSubject.asObservable();
+
+  productsWithAdd$ = merge(
+    this.productWithCategories$,
+    this.productInsertedAction$
+  ).pipe(
+    scan((acc, value) =>
+      (value instanceof Array) ? [...value] : [...acc, value], [] as Product[])
+  )
+
+  addProduct(newProduct?: Product) {
+    newProduct = newProduct || this.fakeProduct();
+    this.productInsertedSubject.next(newProduct);
+  }
+
   constructor(private http: HttpClient,
     private productCategoryService: ProductCategoryService) { }
 
@@ -51,9 +75,13 @@ export class ProductService {
       description: 'Our new product',
       price: 8.9,
       categoryId: 3,
-      // category: 'Toolbox',
+      category: 'Toolbox',
       quantityInStock: 30
     };
+  }
+
+  selectedProductChange(selectedProductId: number) {
+    this.productSelectedSubject.next(selectedProductId);
   }
 
   private handleError(err: HttpErrorResponse): Observable<never> {

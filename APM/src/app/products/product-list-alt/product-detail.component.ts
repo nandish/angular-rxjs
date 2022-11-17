@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { EMPTY, catchError } from 'rxjs';
 import { Supplier } from 'src/app/suppliers/supplier';
 import { Product } from '../product';
 
@@ -13,6 +14,14 @@ export class ProductDetailComponent {
   errorMessage = '';
   product: Product | null = null;
   productSuppliers: Supplier[] | null = null;
+
+  product$ = this.productService.selectedProduct$
+    .pipe(
+      catchError(err => {
+        this.errorMessage = err;
+        return EMPTY;
+      })
+    );
 
   constructor(private productService: ProductService) { }
 
