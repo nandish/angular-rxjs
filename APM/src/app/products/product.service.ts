@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
-import { catchError, Observable, tap, throwError, map, combineLatest, BehaviorSubject, Subject, merge, scan } from 'rxjs';
+import { catchError, Observable, tap, throwError, map, combineLatest, BehaviorSubject, Subject, merge, scan, shareReplay, filter, switchMap, forkJoin, of } from 'rxjs';
 
 import { Product } from './product';
 import { ProductCategoryService } from '../product-categories/product-category.service';
+import { SupplierService } from '../suppliers/supplier.service';
+import { Supplier } from '../suppliers/supplier';
 
 @Injectable({
   providedIn: 'root'
@@ -15,7 +17,7 @@ export class ProductService {
 
   products$ = this.http.get<Product[]>(this.productsUrl)
     .pipe(
-      tap(data => console.log('Products: ', JSON.stringify(data))),
+      //tap(data => console.log('Products: ', JSON.stringify(data))),
       catchError(this.handleError)
     );
 
@@ -30,7 +32,8 @@ export class ProductService {
         category: categories.find(c => product.categoryId === c.id)?.name,
         searchKey: [product.productName]
       }) as Product)
-    )
+    ),
+    shareReplay(1)
   )
 
   private productSelectedSubject = new BehaviorSubject<number>(0);
@@ -43,8 +46,36 @@ export class ProductService {
       map(([products, selectedProductId]) =>
         products.find(product => product.id === selectedProductId)
       ),
-      tap(product => console.log('SelectedProduct', product))
+      tap(product => console.log('SelectedProduct', product)),
+      shareReplay(1)
     );
+
+  // Get It All approach - Retrieves all the suppliers and Filter only we need for that product.
+  // selectedProductSuppliers$ = combineLatest([
+  //   this.selectedProduct$,
+  //   this.supplierService.suppliers$
+  // ]).pipe(
+  //   map(([selectedProduct, suppliers]) =>
+  //     suppliers.filter(supplier => selectedProduct?.supplierIds?.includes(supplier.id))
+  //   )
+  // );
+
+  //just in time approach
+  selectedProductSuppliers$ = this.selectedProduct$
+    .pipe(
+      filter(product => Boolean(product)),
+      switchMap(selectedProduct => {
+        if (selectedProduct?.supplierIds) {
+          return forkJoin(selectedProduct.supplierIds.map(supplierId =>
+            this.http.get<Supplier>(`${this.suppliersUrl}/${supplierId}`)
+          ))
+        } else {
+          return of([]);
+        }
+      }),
+      tap(suppliers => console.log('product suppliers', JSON.stringify(suppliers)))
+    )
+
 
 
 
@@ -65,7 +96,8 @@ export class ProductService {
   }
 
   constructor(private http: HttpClient,
-    private productCategoryService: ProductCategoryService) { }
+    private productCategoryService: ProductCategoryService,
+    private supplierService: SupplierService) { }
 
   private fakeProduct(): Product {
     return {

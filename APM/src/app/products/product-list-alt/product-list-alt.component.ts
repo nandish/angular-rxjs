@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
-import { catchError, EMPTY, Subject } from 'rxjs';
+import { catchError, combineLatest, EMPTY, filter, map, Subject } from 'rxjs';
 
 import { ProductService } from '../product.service';
 
@@ -24,6 +24,18 @@ export class ProductListAltComponent {
     )
 
   selectedProduct$ = this.productService.selectedProduct$;
+
+
+  vm$ = combineLatest([
+    this.products$,
+    this.selectedProduct$
+  ]).pipe(
+    filter(([products]) => Boolean(products)),
+    map(([products, selectedProduct]) =>
+      ({ products, selectedProduct })
+    )
+  );
+
 
   constructor(private productService: ProductService) { }
 
